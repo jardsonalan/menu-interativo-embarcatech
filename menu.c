@@ -8,7 +8,7 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 
-//pinos e módulos controlador i2c selecionado
+// Pinos e módulos controlador i2c selecionado
 #define I2C_PORT i2c1
 #define PINO_SCL 14
 #define PINO_SDA 15
@@ -20,24 +20,28 @@ const int VRY = 27;
 const int ADC_CHANNEL_0 = 0;
 const int ADC_CHANNEL_1 = 1;
 
-//botão do Joystick
+// Botão do Joystick
 const int SW = 22;
 
-//definição dos LEDs RGB
-const uint BLUE_LED_PIN= 12;   // LED azul no GPIO 12
+// Definição dos LEDs RGB
+const uint BLUE_LED_PIN= 12; // LED azul no GPIO 12
 const uint RED_LED_PIN  = 13; // LED vermelho no GPIO 13
-const uint GREEN_LED_PIN = 11;  // LED verde no GPIO 11
+const uint GREEN_LED_PIN = 11; // LED verde no GPIO 11
 const float DIVIDER_PWM = 16.0;
-const uint16_t PERIOD = 4096;
+const uint16_t PERIOD = 2000;
+const uint16_t LED_STEP = 100;
 uint16_t led_b_level, led_r_level = 100;
 uint slice_led_b, slice_led_r;
 
-//variável para armazenar a posição do seletor do display
+// Variável para controlar se o buzzer está ativo ou desligado
+volatile bool stop_star_wars = false;
+
+// Variável para armazenar a posição do seletor do display
 uint pos_y=12;
 
 ssd1306_t disp;
 
-// Notas musicais para a música tema de Star Wars
+// Notas musicais para a música tema de Star Wars - Buzzer
 const uint star_wars_notes[] = {
     330, 330, 330, 262, 392, 523, 330, 262,
     392, 523, 330, 659, 659, 659, 698, 523,
@@ -54,7 +58,7 @@ const uint star_wars_notes[] = {
     392, 659, 784, 659, 523, 494, 440, 392
 };
 
-// Duração das notas em milissegundos
+// Duração das notas em milissegundos - Buzzer
 const uint note_duration[] = {
     500, 500, 500, 350, 150, 300, 500, 350,
     150, 300, 500, 500, 500, 500, 350, 150,
@@ -68,7 +72,7 @@ const uint note_duration[] = {
     350, 150, 300, 500, 500, 350, 150, 300,
 };
 
-//função para inicialização de todos os recursos do sistema
+// Função para inicialização de todos os recursos do sistema
 void inicializa(){
     stdio_init_all();
     adc_init();
@@ -82,7 +86,7 @@ void inicializa(){
     disp.external_vcc=false;
     ssd1306_init(&disp, 128, 64, 0x3C, I2C_PORT);
 
-//inicialização dos LEDs
+// Inicialização dos LEDs
     gpio_init(RED_LED_PIN);
     gpio_init(GREEN_LED_PIN);
     gpio_init(BLUE_LED_PIN);
@@ -95,8 +99,8 @@ void inicializa(){
     gpio_put(GREEN_LED_PIN, 0);
     gpio_put(BLUE_LED_PIN, 0);
 
-    //botão do Joystick
-    gpio_init(SW);             // Inicializa o pino do botão
+    // Botão do Joystick
+    gpio_init(SW); // Inicializa o pino do botão
     gpio_set_dir(SW, GPIO_IN); // Configura o pino do botão como entrada
     gpio_pull_up(SW);
     
@@ -105,12 +109,44 @@ void inicializa(){
     adc_gpio_init(VRY); // Configura o pino VRY (eixo Y) para entrada ADC
 
     // Inicializa o pino do botão do joystick
-    gpio_init(SW);             // Inicializa o pino do botão
+    gpio_init(SW); // Inicializa o pino do botão
     gpio_set_dir(SW, GPIO_IN); // Configura o pino do botão como entrada
     gpio_pull_up(SW);
 }
 
-// Inicializa o PWM no pino do buzzer
+// Função para configurar o PWM de um LED (genérica para azul e vermelho) - Joystick LED
+void setup_pwm_led(uint led, uint *slice, uint16_t level)
+{
+  gpio_set_function(led, GPIO_FUNC_PWM); // Configura o pino do LED como saída PWM
+  *slice = pwm_gpio_to_slice_num(led); // Obtém o slice do PWM associado ao pino do LED
+  pwm_set_clkdiv(*slice, DIVIDER_PWM); // Define o divisor de clock do PWM
+  pwm_set_wrap(*slice, PERIOD); // Configura o valor máximo do contador (período do PWM)
+  pwm_set_gpio_level(led, level); // Define o nível inicial do PWM para o LED
+  pwm_set_enabled(*slice, true); // Habilita o PWM no slice correspondente ao LED
+}
+
+// Função de configuração geral - Joystick LED
+void setup()
+{
+  setup_pwm_led(BLUE_LED_PIN, &slice_led_b, led_b_level); // Configura o PWM para o LED azul
+  setup_pwm_led(RED_LED_PIN, &slice_led_r, led_r_level); // Configura o PWM para o LED vermelho
+}
+
+// Função para ler os valores dos eixos do joystick (X e Y) - Joystick LED
+void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value)
+{
+  // Leitura do valor do eixo X do joystick
+  adc_select_input(ADC_CHANNEL_0); // Seleciona o canal ADC para o eixo X
+  sleep_us(2);                     // Pequeno delay para estabilidade
+  *vrx_value = adc_read();         // Lê o valor do eixo X (0-4095)
+
+  // Leitura do valor do eixo Y do joystick
+  adc_select_input(ADC_CHANNEL_1); // Seleciona o canal ADC para o eixo Y
+  sleep_us(2);                     // Pequeno delay para estabilidade
+  *vry_value = adc_read();         // Lê o valor do eixo Y (0-4095)
+}
+
+// Inicializa o PWM no pino do buzzer - Buzzer
 void pwm_init_buzzer(uint pin) {
     gpio_set_function(pin, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(pin);
@@ -120,7 +156,7 @@ void pwm_init_buzzer(uint pin) {
     pwm_set_gpio_level(pin, 0); // Desliga o PWM inicialmente
 }
 
-// Toca uma nota com a frequência e duração especificadas
+// Toca uma nota com a frequência e duração especificadas - Buzzer
 void play_tone(uint pin, uint frequency, uint duration_ms) {
     uint slice_num = pwm_gpio_to_slice_num(pin);
     uint32_t clock_freq = clock_get_hz(clk_sys);
@@ -135,9 +171,12 @@ void play_tone(uint pin, uint frequency, uint duration_ms) {
     sleep_ms(50); // Pausa entre notas
 }
 
-// Função principal para tocar a música
+// Função principal para tocar a música - Buzzer
 void play_star_wars(uint pin) {
     for (int i = 0; i < sizeof(star_wars_notes) / sizeof(star_wars_notes[0]); i++) {
+        if (stop_star_wars) {
+            break; // Sai do loop se a variável stop_star_wars for verdadeira
+        }
         if (star_wars_notes[i] == 0) {
             sleep_ms(note_duration[i]);
         } else {
@@ -146,54 +185,114 @@ void play_star_wars(uint pin) {
     }
 }
 
-void setup_pwm_led(uint led, uint *slice, uint16_t level)
+// Led RGB
+void setup_pwm()
 {
-  gpio_set_function(led, GPIO_FUNC_PWM); // Configura o pino do LED como saída PWM
-  *slice = pwm_gpio_to_slice_num(led);   // Obtém o slice do PWM associado ao pino do LED
-  pwm_set_clkdiv(*slice, DIVIDER_PWM);   // Define o divisor de clock do PWM
-  pwm_set_wrap(*slice, PERIOD);          // Configura o valor máximo do contador (período do PWM)
-  pwm_set_gpio_level(led, level);        // Define o nível inicial do PWM para o LED
-  pwm_set_enabled(*slice, true);         // Habilita o PWM no slice correspondente ao LED
+    uint slice;
+    gpio_set_function(RED_LED_PIN, GPIO_FUNC_PWM); // Configura o pino do LED para função PWM
+    slice = pwm_gpio_to_slice_num(RED_LED_PIN); // Obtém o slice do PWM associado ao pino do LED
+    pwm_set_clkdiv(slice, DIVIDER_PWM); // Define o divisor de clock do PWM
+    pwm_set_wrap(slice, PERIOD); // Configura o valor máximo do contador (período do PWM)
+    pwm_set_gpio_level(RED_LED_PIN, led_r_level); // Define o nível inicial do PWM para o pino do LED
+    pwm_set_enabled(slice, true); // Habilita o PWM no slice correspondente
 }
 
-void setup()
-{
-  setup_pwm_led(BLUE_LED_PIN, &slice_led_b, led_b_level); // Configura o PWM para o LED azul
-  setup_pwm_led(RED_LED_PIN, &slice_led_r, led_r_level); // Configura o PWM para o LED vermelho
-}
-
-void joystick_read_axis(uint16_t *vrx_value, uint16_t *vry_value)
-{
-  // Leitura do valor do eixo X do joystick
-  adc_select_input(ADC_CHANNEL_0); // Seleciona o canal ADC para o eixo X
-  sleep_us(2);                     // Pequeno delay para estabilidade
-  *vrx_value = adc_read();         // Lê o valor do eixo X (0-4095)
-
-  // Leitura do valor do eixo Y do joystick
-  adc_select_input(ADC_CHANNEL_1); // Seleciona o canal ADC para o eixo Y
-  sleep_us(2);                     // Pequeno delay para estabilidade
-  *vry_value = adc_read();         // Lê o valor do eixo Y (0-4095)
-}
-
-//função escrita no display.
+// Função escrita no display.
 void print_texto(char *msg, uint pos_x, uint pos_y, uint scale){
-    ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);//desenha texto
-    ssd1306_show(&disp);//apresenta no Oled
+    ssd1306_draw_string(&disp, pos_x, pos_y, scale, msg);// Desenha texto
+    ssd1306_show(&disp);// Apresenta no Oled
 }
 
-//o desenho do retangulo fará o papel de seletor
+// O desenho do retangulo fará o papel de seletor
 void print_retangulo(int x1, int y1, int x2, int y2){
     ssd1306_draw_empty_square(&disp,x1,y1,x2,y2);
     ssd1306_show(&disp);
+}
+
+// Função para executar a opção do Joystick LED
+void joystick_led(){
+    uint16_t vrx_value, vry_value, sw_value; // Variáveis para armazenar os valores do joystick (eixos X e Y) e botão
+    setup(); // Chama a função de configuração
+    // Loop principal
+    while (1)
+    {
+        joystick_read_axis(&vrx_value, &vry_value); // Lê os valores dos eixos do joystick
+        // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
+        pwm_set_gpio_level(BLUE_LED_PIN, vrx_value); // Ajusta o brilho do LED azul com o valor do eixo X
+        pwm_set_gpio_level(RED_LED_PIN, vry_value); // Ajusta o brilho do LED vermelho com o valor do eixo Y
+
+        // Pequeno delay antes da próxima leitura
+        sleep_ms(100); // Espera 100 ms antes de repetir o ciclo
+
+        if (gpio_get(SW) == 0) {
+            joystick_read_axis(&vrx_value, &vry_value); // Lê os valores dos eixos do joystick
+            // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
+            pwm_set_gpio_level(BLUE_LED_PIN, 0); // Ajusta o brilho do LED azul com o valor do eixo X
+            pwm_set_gpio_level(RED_LED_PIN, 0); // Ajusta o brilho do LED vermelho com o valor do eixo Y
+            break;
+        }
+    }
+}
+
+// Função para executar a opção do Buzzer
+void tocar_buzzer(){
+    stop_star_wars = false; // Reseta a variável stop_star_wars
+    for (int i = 0; i < sizeof(star_wars_notes) / sizeof(star_wars_notes[0]); i++) {
+        if (stop_star_wars) {
+            break; // Sai do loop se a variável stop_star_wars for verdadeira
+        }
+        if (star_wars_notes[i] == 0) {
+            sleep_ms(note_duration[i]);
+        } else {
+            play_tone(BUZZER_PIN, star_wars_notes[i], note_duration[i]);
+        }
+        if (gpio_get(SW) == 0) {
+            stop_star_wars = true; // Define a variável stop_star_wars como verdadeira quando o botão do joystick for pressionado
+        }
+    }
+}
+
+// Função para executar a opção do Led RGB
+void led_rgb(){
+    uint up_down = 1;
+    setup_pwm();
+
+    while (true)
+    {
+        pwm_set_gpio_level(RED_LED_PIN, led_r_level); // Define o nível atual do PWM (duty
+        sleep_ms(100);
+        if (up_down)
+        {
+            led_r_level += LED_STEP; // Incrementa o nível do LED
+            if (gpio_get(SW) == 0) {
+                pwm_set_gpio_level(RED_LED_PIN, 0);
+                break;
+            } else {
+                if (led_r_level >= PERIOD)
+                    up_down = 0; // Muda direção para diminuir quando atingir o período máximo
+            }
+        }
+        else
+        {
+            led_r_level -= LED_STEP; // Decrementa o nível do LED
+            if (gpio_get(SW) == 0) {
+                pwm_set_gpio_level(RED_LED_PIN, 0);
+                break;
+            } else {
+                if (led_r_level <= LED_STEP)
+                    up_down = 1; // Muda direção para aumentar quando atingir o mínimo
+            }
+        }
+    }
 }
 
 int main()
 {
     inicializa();
     pwm_init_buzzer(BUZZER_PIN);
-    char *text = ""; //texto do menu
-    uint countdown = 0; //verificar seleções para baixo do joystick
-    uint countup = 2; //verificar seleções para cima do joystick
+    char *text = ""; // Texto do menu
+    uint countdown = 0; // Verificar seleções para baixo do joystick
+    uint countup = 2; // Verificar seleções para cima do joystick
     uint adc_y_raw_old = 0;
    
     while(true){
@@ -230,47 +329,19 @@ int main()
 
         sleep_ms(100);
 
-        //verifica se botão foi pressionado. Se sim, entra no switch case para verificar posição do seletor e chama acionamento dos leds.
+        // Verifica se botão foi pressionado. Se sim, entra no switch case para verificar posição do seletor e chama acionamento dos leds.
         if(gpio_get(SW) == 0){
             switch (pos_y){
                 case 12:
-                    uint16_t vrx_value, vry_value, sw_value; // Variáveis para armazenar os valores do joystick (eixos X e Y) e botão
-                    setup();                                 // Chama a função de configuração
-                    // Loop principal
-                    while (1)
-                    {
-                        joystick_read_axis(&vrx_value, &vry_value); // Lê os valores dos eixos do joystick
-                        // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
-                        pwm_set_gpio_level(BLUE_LED_PIN, vrx_value); // Ajusta o brilho do LED azul com o valor do eixo X
-                        pwm_set_gpio_level(RED_LED_PIN, vry_value); // Ajusta o brilho do LED vermelho com o valor do eixo Y
-
-                        // Pequeno delay antes da próxima leitura
-                        sleep_ms(100); // Espera 100 ms antes de repetir o ciclo
-
-                        if (gpio_get(SW) == 0) {
-                            joystick_read_axis(&vrx_value, &vry_value); // Lê os valores dos eixos do joystick
-                            // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
-                            pwm_set_gpio_level(BLUE_LED_PIN, 0); // Ajusta o brilho do LED azul com o valor do eixo X
-                            pwm_set_gpio_level(RED_LED_PIN, 0); // Ajusta o brilho do LED vermelho com o valor do eixo Y
-                            break;
-                        }
-                    }
+                    joystick_led();
                     break;
                 case 24:
-                    play_star_wars(BUZZER_PIN);
+                    tocar_buzzer();
                     break;
                 case 36:
-                    if (gpio_get(SW) == 0) {
-                        gpio_put(BLUE_LED_PIN, 1);   
-                        gpio_put(RED_LED_PIN, 0);   
-                        gpio_put(GREEN_LED_PIN, 0);
-                        break;
-                    }
+                    led_rgb();
                     break;
                 default:
-                    gpio_put(BLUE_LED_PIN, 0);   
-                    gpio_put(RED_LED_PIN, 0);   
-                    gpio_put(GREEN_LED_PIN, 0);
                     break;
             }
        }
