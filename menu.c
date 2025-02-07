@@ -168,7 +168,7 @@ void play_tone(uint pin, uint frequency, uint duration_ms) {
     sleep_ms(duration_ms);
 
     pwm_set_gpio_level(pin, 0); // Desliga o som após a duração
-    sleep_ms(50); // Pausa entre notas
+    sleep_ms(20); // Pausa entre notas
 }
 
 // Função principal para tocar a música - Buzzer
@@ -229,6 +229,7 @@ void joystick_led(){
             // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
             pwm_set_gpio_level(BLUE_LED_PIN, 0); // Ajusta o brilho do LED azul com o valor do eixo X
             pwm_set_gpio_level(RED_LED_PIN, 0); // Ajusta o brilho do LED vermelho com o valor do eixo Y
+            sleep_ms(50);
             break;
         }
     }
@@ -247,6 +248,7 @@ void tocar_buzzer(){
             play_tone(BUZZER_PIN, star_wars_notes[i], note_duration[i]);
         }
         if (gpio_get(SW) == 0) {
+            sleep_ms(100);
             stop_star_wars = true; // Define a variável stop_star_wars como verdadeira quando o botão do joystick for pressionado
         }
     }
@@ -266,6 +268,7 @@ void led_rgb(){
             led_r_level += LED_STEP; // Incrementa o nível do LED
             if (gpio_get(SW) == 0) {
                 pwm_set_gpio_level(RED_LED_PIN, 0);
+                sleep_ms(80);
                 break;
             } else {
                 if (led_r_level >= PERIOD)
@@ -277,6 +280,7 @@ void led_rgb(){
             led_r_level -= LED_STEP; // Decrementa o nível do LED
             if (gpio_get(SW) == 0) {
                 pwm_set_gpio_level(RED_LED_PIN, 0);
+                sleep_ms(80);
                 break;
             } else {
                 if (led_r_level <= LED_STEP)
@@ -327,7 +331,7 @@ int main()
             adc_y_raw_old = bar_y_pos;
         }
 
-        sleep_ms(100);
+        sleep_ms(50);
 
         // Verifica se botão foi pressionado. Se sim, entra no switch case para verificar posição do seletor e chama acionamento dos leds.
         if(gpio_get(SW) == 0){
