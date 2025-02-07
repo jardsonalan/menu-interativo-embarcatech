@@ -243,6 +243,7 @@ void tocar_buzzer(){
             break; // Sai do loop se a variável stop_star_wars for verdadeira
         }
         if (star_wars_notes[i] == 0) {
+            break;
             sleep_ms(note_duration[i]);
         } else {
             play_tone(BUZZER_PIN, star_wars_notes[i], note_duration[i]);
