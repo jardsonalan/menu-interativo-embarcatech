@@ -107,11 +107,6 @@ void inicializa(){
     adc_init();         // Inicializa o módulo ADC
     adc_gpio_init(VRX); // Configura o pino VRX (eixo X) para entrada ADC
     adc_gpio_init(VRY); // Configura o pino VRY (eixo Y) para entrada ADC
-
-    // Inicializa o pino do botão do joystick
-    gpio_init(SW); // Inicializa o pino do botão
-    gpio_set_dir(SW, GPIO_IN); // Configura o pino do botão como entrada
-    gpio_pull_up(SW);
 }
 
 // Função para configurar o PWM de um LED (genérica para azul e vermelho) - Joystick LED
@@ -229,7 +224,7 @@ void joystick_led(){
             // Ajusta os níveis PWM dos LEDs de acordo com os valores do joystick
             pwm_set_gpio_level(BLUE_LED_PIN, 0); // Ajusta o brilho do LED azul com o valor do eixo X
             pwm_set_gpio_level(RED_LED_PIN, 0); // Ajusta o brilho do LED vermelho com o valor do eixo Y
-            sleep_ms(50);
+            sleep_ms(100);
             break;
         }
     }
@@ -269,7 +264,7 @@ void led_rgb(){
             led_r_level += LED_STEP; // Incrementa o nível do LED
             if (gpio_get(SW) == 0) {
                 pwm_set_gpio_level(RED_LED_PIN, 0);
-                sleep_ms(80);
+                sleep_ms(100);
                 break;
             } else {
                 if (led_r_level >= PERIOD)
@@ -281,7 +276,7 @@ void led_rgb(){
             led_r_level -= LED_STEP; // Decrementa o nível do LED
             if (gpio_get(SW) == 0) {
                 pwm_set_gpio_level(RED_LED_PIN, 0);
-                sleep_ms(80);
+                sleep_ms(100);
                 break;
             } else {
                 if (led_r_level <= LED_STEP)
@@ -338,13 +333,18 @@ int main()
         if(gpio_get(SW) == 0){
             switch (pos_y){
                 case 12:
+                    sleep_ms(50);
                     joystick_led();
+                    sleep_ms(20);
                     break;
                 case 24:
+                    sleep_ms(300);
                     tocar_buzzer();
                     break;
                 case 36:
+                    sleep_ms(50);
                     led_rgb();
+                    sleep_ms(20);
                     break;
                 default:
                     break;
