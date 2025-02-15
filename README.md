@@ -41,13 +41,13 @@ Para compilar e executar o projeto, siga os passos abaixo:
 1. **Clone o repositório:**
 
    ```bash
-   git clone https://github.com/jardsonalan/menu-embarcatec.git
+   git clone https://github.com/jardsonalan/menu-interativo-embarcatec.git
    ```
 
 2. **Acesse o diretório do projeto:**
 
    ```bash
-   cd menu-embarcatec
+   cd menu-interativo-embarcatec
    ```
 
 3. **Crie uma pasta para build e acesse-a:**
